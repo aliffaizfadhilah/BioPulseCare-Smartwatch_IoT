@@ -20,6 +20,7 @@ from app.core.security import (
     validate_device_id,
 )
 from app.database import db
+from app.services.ml_service import ml_service
 from app.services.mqtt_service import mqtt_service
 from app.services.telegram_service import telegram_service
 from app.services.watchdog_service import watchdog_service
@@ -116,26 +117,31 @@ def dispatch_api_request(
             devices = db.list_devices()
             return HTTPStatus.OK, {"items": devices, "total": len(devices)}
 
+        # 2b. GET /api/ml/status
+        if method == "GET" and clean_path == "/api/ml/status":
+            dev_id = (query_params.get("device_id") or [settings.default_device_id])[0]
+            return HTTPStatus.OK, ml_service.status(dev_id)
+
         # 3. GET /api/dashboard/summary
         if method == "GET" and clean_path == "/api/dashboard/summary":
             dev_id = (query_params.get("device_id") or [settings.default_device_id])[0]
             category = (query_params.get("category") or ["Semua Event"])[0]
             search_q = (query_params.get("q") or [""])[0]
+            days_window = int((query_params.get("days") or ["3"])[0])
             device = db.get_device(dev_id)
-            telemetry_series = db.list_telemetry(dev_id, limit=16)
-            alerts_data = db.list_alerts(dev_id, category=category, search_q=search_q, limit=20)
-            all_alerts = db.list_alerts(dev_id, limit=5)["items"]
-
-            recent_activities = [
-                {
-                    "id": item["id"],
-                    "title": item["title"],
-                    "subtitle": item["description"],
-                    "time_wib": f"{item['time_wib'][:5]} WIB",
-                    "urgency": item["urgency"],
-                }
-                for item in all_alerts[:3]
-            ]
+            telemetry_series = db.list_telemetry(
+                dev_id, limit=16, reset_after_offline=True, days_window=days_window
+            )
+            telemetry_history = db.list_telemetry_history(
+                dev_id, limit=30, days_window=days_window
+            )
+            alerts_data = db.list_alerts(
+                dev_id,
+                category=category,
+                search_q=search_q,
+                limit=20,
+                days_window=days_window,
+            )
 
             return HTTPStatus.OK, {
                 "device": device,
@@ -149,6 +155,7 @@ def dispatch_api_request(
                     "heartbeat_sec": settings.heartbeat_interval_sec,
                     "offline_timeout_sec": settings.heartbeat_timeout_sec,
                     "fall_threshold_ms2": settings.fall_impact_threshold_ms2,
+                    "dashboard_retention_days": days_window,
                 },
                 "mqtt": {
                     "connected": mqtt_service.is_connected,
@@ -156,7 +163,9 @@ def dispatch_api_request(
                     "topic_prefix": f"{settings.mqtt_topic_prefix}/{device['device_id']}",
                 },
                 "telemetry_series": telemetry_series,
-                "recent_activities": recent_activities,
+                "ml": ml_service.status(dev_id),
+                "telemetry_history": telemetry_history,
+                "recent_activities": [],
                 "alerts": alerts_data,
                 "disclaimer": (
                     "Sistem BioPulse Care merupakan prototipe pemantauan dan peringatan awal, "
@@ -269,6 +278,21 @@ def dispatch_api_request(
                         {"device_id": device_id, "status": "online", "reason": "mqtt_connect"},
                     )
                     return HTTPStatus.OK, {"ok": True, "simulated": "online", "result": res}
+                if sim_type == "vital_anomaly":
+                    mqtt_service._last_vital_alert_ts.pop(device_id, None)
+                    res = mqtt_service.handle_mqtt_message(
+                        "telemetry",
+                        {
+                            "device_id": device_id,
+                            "bpm": int(payload.get("bpm") or 132),
+                            "spo2": int(payload.get("spo2") or 89),
+                            "finger_detected": True,
+                            "accel_mag": 9.8,
+                            "sos_active": False,
+                            "fall_candidate": False,
+                        },
+                    )
+                    return HTTPStatus.OK, {"ok": True, "simulated": "vital_anomaly", "result": res}
                 res = mqtt_service.handle_mqtt_message(
                     "telemetry",
                     {

@@ -15,7 +15,6 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-thumb { background: #cbdbf5; border-radius: 9999px; }
   </style>
-  <!-- Note: Using Tailwind Play CDN for standalone instant preview; run `npm run build` in frontend/ for production bundled CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script id="tailwind-config">
     tailwind.config = {
@@ -113,7 +112,7 @@
             "headline-md": ["1.25rem", { lineHeight: "1.75rem", letterSpacing: "-0.01em", fontWeight: "600" }],
             "metric-numeral": ["2.75rem", { lineHeight: "3rem", letterSpacing: "-0.03em", fontWeight: "700" }],
             "body-sm": ["0.8125rem", { lineHeight: "1.25rem", fontWeight: "400" }],
-            "body-lg": ["1.125rem", { lineHeight: "1.75rem", fontWeight: "400" }],
+            "body-lg": ["1.125rem", { lineHeight: "1.75rem", letterSpacing: "0", fontWeight: "400" }],
             "headline-lg": ["2rem", { lineHeight: "2.5rem", letterSpacing: "-0.02em", fontWeight: "600" }]
           }
         }
@@ -123,7 +122,7 @@
 </head>
 <body class="bg-surface font-body-md text-on-surface min-h-screen">
   <div id="root">
-    <!-- Top Header (Stitch Screen 24d7fead204a471b94161244d0508be0) -->
+    <!-- Top Header (Tanpa duplikasi badge status yang sudah ada di Card Utama) -->
     <header class="fixed top-0 right-0 left-0 h-16 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 px-space-md flex items-center justify-between">
       <div class="flex items-center gap-space-md">
         <div class="flex items-center gap-2">
@@ -136,16 +135,12 @@
           <span class="material-symbols-outlined text-primary text-[18px]">person</span>
           <span>Ayah: <strong id="hdr-patient-name">Bpk. Soedirman</strong></span>
         </div>
-        <div id="hdr-status-pill" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed/50 text-on-secondary-container">
-          <span id="hdr-status-dot" class="w-2 h-2 rounded-full bg-secondary"></span>
-          <span id="hdr-status-text" class="font-label-sm text-label-sm font-semibold">Kondisi Sehat &amp; Aman</span>
-        </div>
       </div>
 
       <div class="flex items-center gap-space-md">
         <div id="ws-indicator" class="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-low text-on-surface-variant font-label-sm text-label-sm">
           <span id="ws-dot" class="w-2 h-2 rounded-full bg-secondary"></span>
-          <span id="ws-label">Live WebSocket</span>
+          <span id="ws-label">Sinkronisasi Real-time Aktif</span>
         </div>
         <div class="flex items-center gap-2">
           <div class="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-label-md shadow-sm border border-surface-container-high/40">
@@ -169,16 +164,24 @@
     <main class="w-full pt-16 bg-surface min-h-screen p-space-md lg:p-space-lg">
       <div class="flex flex-col w-full gap-space-lg max-w-7xl mx-auto pt-2">
 
-        <!-- 1. Hero Status Banner -->
+        <!-- 1. Hero Status Banner (Hanya tombol Bunyikan Gelang, tanpa Kirim Suara & tanpa duplikasi info) -->
         <section id="hero-card" class="w-full bg-surface-container-lowest rounded-2xl shadow-sm p-space-lg flex flex-col md:flex-row md:items-center justify-between gap-space-md border border-secondary-fixed/50">
           <div class="flex flex-col gap-2 max-w-2xl">
-            <div class="inline-flex items-center gap-2 text-secondary font-label-md text-label-md font-semibold">
-              <span class="material-symbols-outlined text-[20px]">verified</span>
-              <span id="hero-kicker">Pantauan Terkini</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <div id="hdr-status-pill" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed/50 text-on-secondary-container">
+                <span id="hdr-status-dot" class="w-2 h-2 rounded-full bg-secondary"></span>
+                <span id="hdr-status-text" class="font-label-sm text-label-sm font-semibold">Kondisi Sehat &amp; Aman</span>
+              </div>
+              <span class="inline-flex items-center gap-1 text-[12px] text-on-surface-variant/80 bg-surface-container-low px-2.5 py-0.5 rounded-full">
+                <span class="material-symbols-outlined text-[14px] text-primary">info</span>
+                <span>Indikasi &amp; Peringatan Awal (Bukan Diagnosis Medis)</span>
+              </span>
             </div>
+
             <h1 id="hero-headline" class="font-headline-lg text-headline-lg text-on-surface tracking-tight font-bold">
               Alhamdulillah, kondisi Ayah hari ini terpantau sehat dan beristirahat nyaman.
             </h1>
+
             <div class="flex flex-wrap items-center gap-4 text-on-surface-variant font-label-md text-label-md pt-1">
               <span class="inline-flex items-center gap-1.5">
                 <span class="material-symbols-outlined text-[18px] text-secondary">battery_charging_full</span>
@@ -188,21 +191,13 @@
                 <span id="hero-wifi-icon" class="material-symbols-outlined text-[18px] text-primary">wifi</span>
                 <span id="hero-conn-text">Gelang Terhubung</span>
               </span>
-              <span class="inline-flex items-center gap-1 text-[12px] text-on-surface-variant/80 bg-surface-container-low px-2.5 py-0.5 rounded-full">
-                <span class="material-symbols-outlined text-[14px] text-primary">info</span>
-                <span>Indikasi &amp; Peringatan Awal (Bukan Diagnosis Medis)</span>
-              </span>
             </div>
           </div>
 
-          <div class="flex flex-row sm:flex-col gap-space-xs min-w-[220px]">
-            <button id="btn-buzzer" type="button" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary text-on-primary font-label-md text-label-md shadow-sm hover:opacity-90 transition-all">
+          <div class="flex flex-row sm:flex-col gap-space-xs min-w-[210px]">
+            <button id="btn-buzzer" type="button" class="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-primary text-on-primary font-label-md text-label-md shadow-sm hover:opacity-90 transition-all">
               <span class="material-symbols-outlined text-[20px]">ring_volume</span>
               <span>Bunyikan Gelang</span>
-            </button>
-            <button id="btn-voice-msg" type="button" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-surface-container text-on-surface font-label-md text-label-md hover:bg-surface-container-high transition-colors">
-              <span class="material-symbols-outlined text-[20px] text-primary">mic</span>
-              <span>Kirim Suara</span>
             </button>
             <button id="btn-reset-alarm" type="button" class="hidden items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#fee2e2] text-[#b91a24] font-label-md text-label-md font-semibold hover:opacity-90 transition-all">
               <span class="material-symbols-outlined text-[18px]">restart_alt</span>
@@ -211,7 +206,7 @@
           </div>
         </section>
 
-        <!-- 2. Three Vital Metric Cards -->
+        <!-- 2. Three Vital Metric Cards (Tanpa duplikasi teks status yang sama) -->
         <section class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
           <!-- Detak Jantung -->
           <div class="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col justify-between border border-surface-container-high/40">
@@ -249,7 +244,7 @@
             </div>
             <div id="badge-spo2" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed/50 text-on-secondary-container font-label-sm text-label-sm font-semibold self-start">
               <span class="material-symbols-outlined text-[16px]">done_all</span>
-              <span id="badge-spo2-text">Sangat Baik</span>
+              <span id="badge-spo2-text">Saturasi Optimal</span>
             </div>
           </div>
 
@@ -266,13 +261,13 @@
               <span id="sub-posture" class="font-body-sm text-body-sm text-on-surface-variant">Tidak Terdeteksi Jatuh</span>
             </div>
             <div id="badge-posture" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary text-on-secondary font-label-sm text-label-sm font-semibold self-start">
-              <span class="material-symbols-outlined text-[16px]">check_circle</span>
-              <span id="badge-posture-text">Sensor Aktif</span>
+              <span class="material-symbols-outlined text-[16px]">sensors</span>
+              <span id="badge-posture-text">MPU6050 Aktif</span>
             </div>
           </div>
         </section>
 
-        <!-- 3. Grafik Tren Hari Ini -->
+        <!-- 3. Grafik Tren Hari Ini (Otomatis Ke-reset Setelah Offline) -->
         <section class="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col gap-space-md border border-surface-container-high/40">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center gap-2">
@@ -293,14 +288,19 @@
               <button id="btn-sim-offline" type="button" class="px-2.5 py-1 rounded-lg bg-surface-container-high hover:opacity-90 text-on-surface font-label-sm text-label-sm font-semibold transition-colors">
                 Uji Offline LWT
               </button>
-              <a href="#section-log-event" class="font-label-md text-label-md text-primary font-semibold hover:underline flex items-center gap-1 ml-2">
+              <button id="btn-jump-vitals-tab" type="button" class="font-label-md text-label-md text-primary font-semibold hover:underline flex items-center gap-1 ml-2">
                 <span>Lihat Riwayat Lengkap</span>
                 <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
-              </a>
+              </button>
             </div>
           </div>
 
           <div class="w-full h-32 relative bg-surface-container-low/40 rounded-xl p-2 overflow-hidden">
+            <div id="trend-empty-overlay" class="hidden absolute inset-0 z-10 flex items-center justify-center bg-surface-container-low/75 backdrop-blur-[1px]">
+              <span id="trend-empty-text" class="font-label-md text-body-sm text-on-surface-variant font-medium px-3 py-1.5 rounded-full bg-white/90 shadow-sm border border-surface-container-high">
+                Grafik tren telah di-reset setelah perangkat offline. Menunggu data telemetri baru...
+              </span>
+            </div>
             <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 800 100">
               <defs>
                 <linearGradient id="calmTrendFill" x1="0" x2="0" y1="0" y2="1">
@@ -315,45 +315,15 @@
             </svg>
           </div>
           <div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant px-1">
-            <span>Pagi (06.00)</span>
-            <span>Siang (12.00)</span>
-            <span>Sore (16.00)</span>
-            <span id="trend-now-label">Sekarang (10.42)</span>
+            <span id="trend-start-label">Awal Sesi</span>
+            <span>Tengah Sesi</span>
+            <span id="trend-now-label">Sekarang</span>
           </div>
         </section>
 
-        <!-- 4. Aktivitas Terakhir -->
-        <section class="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col gap-space-sm border border-surface-container-high/40">
-          <h2 class="font-label-md text-label-md text-on-surface-variant font-semibold uppercase tracking-wider">Aktivitas Terakhir</h2>
-          <div id="recent-activities-list" class="divide-y divide-surface-container-high/40">
-            <div class="py-3 flex items-center justify-between gap-4">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-secondary-fixed/50 flex items-center justify-center text-secondary">
-                  <span class="material-symbols-outlined text-[18px]">check_circle</span>
-                </div>
-                <div>
-                  <span class="font-body-md text-body-md font-semibold text-on-surface block">Pemeriksaan Rutin Pagi Selesai</span>
-                  <span class="font-body-sm text-body-sm text-on-surface-variant">Tanda vital normal, Ayah beristirahat dengan tenang.</span>
-                </div>
-              </div>
-              <span class="font-label-sm text-label-sm text-on-surface-variant font-medium">10.42 WIB</span>
-            </div>
-            <div class="py-3 flex items-center justify-between gap-4">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface">
-                  <span class="material-symbols-outlined text-[18px]">directions_walk</span>
-                </div>
-                <div>
-                  <span class="font-body-md text-body-md font-semibold text-on-surface block">Jalan Santai di Teras</span>
-                  <span class="font-body-sm text-body-sm text-on-surface-variant">Gerakan stabil dan sarapan tepat waktu.</span>
-                </div>
-              </div>
-              <span class="font-label-sm text-label-sm text-on-surface-variant font-medium">07.10 WIB</span>
-            </div>
-          </div>
-        </section>
+        <!-- (Bagian Aktivitas Terakhir dikosongkan/dihilangkan sesuai instruksi 5a agar tidak duplikat dengan Log Event) -->
 
-        <!-- 5. Log Notifikasi Telegram & Riwayat Event -->
+        <!-- 4. Log Notifikasi Telegram & Riwayat (2 Tab Menu + Retensi Tampilan 3 Hari) -->
         <section id="section-log-event" class="w-full bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col gap-5 border border-surface-container-high/40">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="flex items-start gap-3">
@@ -361,9 +331,16 @@
                 <span class="material-symbols-outlined text-[24px]">move_to_inbox</span>
               </div>
               <div>
-                <h2 class="font-headline-md text-headline-md text-on-surface font-bold tracking-tight">Log Notifikasi Telegram &amp; Riwayat Event</h2>
+                <div class="flex flex-wrap items-center gap-2">
+                  <h2 class="font-headline-md text-headline-md text-on-surface font-bold tracking-tight">
+                    Log Notifikasi Telegram &amp; Riwayat Sensor
+                  </h2>
+                  <span class="px-2.5 py-0.5 rounded-full bg-surface-container text-primary font-label-sm text-[11px] font-semibold">
+                    Auto-Reset Tampilan 3 Hari (Tersimpan di Database)
+                  </span>
+                </div>
                 <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                  Sinkronisasi otomatis bot <span class="font-semibold text-primary">@BioPulseCare_bot</span> ke kanal darurat keluarga.
+                  Sinkronisasi otomatis bot <span class="font-semibold text-primary">@BioPulseCare_smartwach_bot</span> ke kanal darurat keluarga.
                 </p>
               </div>
             </div>
@@ -373,40 +350,84 @@
             </button>
           </div>
 
-          <!-- Search & Filter Controls -->
-          <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 pt-1">
-            <div class="relative flex-1 max-w-lg">
-              <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
-              <input id="input-search-event" type="text" placeholder="Cari event, kata kunci, atau metrik..." class="w-full pl-11 pr-4 py-2 bg-surface-container-low/50 hover:bg-surface-container-low focus:bg-white text-on-surface placeholder:text-on-surface-variant/70 border border-surface-container-high/60 rounded-xl text-body-sm outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary" />
+          <!-- 2 Tab Menu Switcher -->
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-surface-container-high/60 pb-3">
+            <div class="inline-flex p-1 rounded-xl bg-surface-container-low border border-surface-container-high/50">
+              <button id="tab-btn-events" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-label-md text-label-sm font-semibold shadow-sm transition-all">
+                <span class="material-symbols-outlined text-[18px]">notifications</span>
+                <span>Log Event</span>
+                <span id="badge-count-events" class="px-2 py-0.5 rounded-full bg-white/20 text-[11px]">5</span>
+              </button>
+              <button id="tab-btn-vitals" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-on-surface-variant hover:text-on-surface font-label-md text-label-sm font-semibold transition-all">
+                <span class="material-symbols-outlined text-[18px]">monitor_heart</span>
+                <span>Riwayat Detak Jantung &amp; Kadar Oksigen</span>
+                <span id="badge-count-vitals" class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface text-[11px]">0</span>
+              </button>
             </div>
-            <div class="flex items-center gap-2 self-end md:self-auto">
-              <span class="font-label-md text-body-sm text-on-surface-variant font-medium">Kategori:</span>
-              <select id="select-category-event" class="bg-surface-container-low/50 border border-surface-container-high/60 text-on-surface font-label-md text-body-sm rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-primary transition-all">
-                <option value="Semua Event" id="opt-all-events">Semua Event (5)</option>
-                <option value="Urgensi Normal">Urgensi Normal</option>
-                <option value="Perhatian & Peringatan">Perhatian &amp; Peringatan</option>
-                <option value="Status Daya">Status Daya</option>
-                <option value="Uji Sistem">Uji Sistem</option>
-              </select>
+
+            <span id="retention-info-label" class="font-body-sm text-[12px] text-on-surface-variant">
+              Menampilkan data maks. 3 hari terakhir di dashboard (data lebih lama tetap tersimpan di database).
+            </span>
+          </div>
+
+          <!-- TAB 1 CONTENT: Log Event & Notifikasi Telegram -->
+          <div id="tab-panel-events" class="flex flex-col gap-4">
+            <!-- Search & Filter Controls -->
+            <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+              <div class="relative flex-1 max-w-lg">
+                <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+                <input id="input-search-event" type="text" placeholder="Cari event, kata kunci, atau metrik..." class="w-full pl-11 pr-4 py-2 bg-surface-container-low/50 hover:bg-surface-container-low focus:bg-white text-on-surface placeholder:text-on-surface-variant/70 border border-surface-container-high/60 rounded-xl text-body-sm outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary" />
+              </div>
+              <div class="flex items-center gap-2 self-end md:self-auto">
+                <span class="font-label-md text-body-sm text-on-surface-variant font-medium">Kategori:</span>
+                <select id="select-category-event" class="bg-surface-container-low/50 border border-surface-container-high/60 text-on-surface font-label-md text-body-sm rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-primary transition-all">
+                  <option value="Semua Event" id="opt-all-events">Semua Event (5)</option>
+                  <option value="Urgensi Normal">Urgensi Normal</option>
+                  <option value="Perhatian & Peringatan">Perhatian &amp; Peringatan</option>
+                  <option value="Status Daya">Status Daya</option>
+                  <option value="Uji Sistem">Uji Sistem</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Table Log Event -->
+            <div class="w-full overflow-x-auto">
+              <table class="w-full text-left border-collapse min-w-[760px]">
+                <thead>
+                  <tr class="border-b border-surface-container-high/40 text-on-surface-variant font-label-md text-label-sm uppercase tracking-wider">
+                    <th class="py-3 px-3 font-semibold w-[120px]">Waktu (WIB)</th>
+                    <th class="py-3 px-3 font-semibold w-[130px]">Tingkat Urgensi</th>
+                    <th class="py-3 px-4 font-semibold">Deskripsi Telemetri Sensor</th>
+                    <th class="py-3 px-4 font-semibold w-[220px]">Status Pengiriman Telegram</th>
+                    <th class="py-3 px-3 text-right font-semibold w-[90px]">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="event-table-body" class="divide-y divide-surface-container-high/40 text-on-surface text-body-sm">
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <!-- Table Log Event -->
-          <div class="w-full overflow-x-auto">
-            <table class="w-full text-left border-collapse min-w-[760px]">
-              <thead>
-                <tr class="border-b border-surface-container-high/40 text-on-surface-variant font-label-md text-label-sm uppercase tracking-wider">
-                  <th class="py-3 px-3 font-semibold w-[120px]">Waktu (WIB)</th>
-                  <th class="py-3 px-3 font-semibold w-[130px]">Tingkat Urgensi</th>
-                  <th class="py-3 px-4 font-semibold">Deskripsi Telemetri Sensor</th>
-                  <th class="py-3 px-4 font-semibold w-[220px]">Status Pengiriman Telegram</th>
-                  <th class="py-3 px-3 text-right font-semibold w-[90px]">Aksi</th>
-                </tr>
-              </thead>
-              <tbody id="event-table-body" class="divide-y divide-surface-container-high/40 text-on-surface text-body-sm">
-              </tbody>
-            </table>
+          <!-- TAB 2 CONTENT: Riwayat Detak Jantung & Kadar Oksigen -->
+          <div id="tab-panel-vitals" class="hidden flex-col gap-4">
+            <div class="w-full overflow-x-auto">
+              <table class="w-full text-left border-collapse min-w-[700px]">
+                <thead>
+                  <tr class="border-b border-surface-container-high/40 text-on-surface-variant font-label-md text-label-sm uppercase tracking-wider">
+                    <th class="py-3 px-3 font-semibold w-[140px]">Waktu (WIB)</th>
+                    <th class="py-3 px-4 font-semibold">Detak Jantung (BPM)</th>
+                    <th class="py-3 px-4 font-semibold">Kadar Oksigen (SpO2)</th>
+                    <th class="py-3 px-4 font-semibold">Kontak Jari (MAX30102)</th>
+                    <th class="py-3 px-4 font-semibold">Akselerasi Gerak</th>
+                    <th class="py-3 px-3 text-right font-semibold">Status Indikasi</th>
+                  </tr>
+                </thead>
+                <tbody id="vitals-table-body" class="divide-y divide-surface-container-high/40 text-on-surface text-body-sm">
+                </tbody>
+              </table>
+            </div>
           </div>
+
         </section>
 
       </div>

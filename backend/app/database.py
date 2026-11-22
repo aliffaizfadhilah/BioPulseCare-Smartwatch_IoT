@@ -825,7 +825,13 @@ class DatabaseManager:
         search_q: str | None = None,
         limit: int = 25,
         offset: int = 0,
+        days_window: int | None = 3,
     ) -> dict[str, Any]:
+        """List alerts for dashboard display.
+
+        By default filters to the last 3 days (days_window=3) for dashboard view
+        while keeping all historical rows intact in the database.
+        """
         clean_id = validate_device_id(device_id)
         clean_q = sanitize_search_query(search_q)
         limit = max(1, min(100, int(limit)))
@@ -833,6 +839,13 @@ class DatabaseManager:
 
         where_clauses = ["a.device_id = ?"]
         params: list[Any] = [clean_id]
+
+        if days_window is not None and days_window > 0:
+            cutoff_iso = (
+                datetime.now(timezone.utc) - timedelta(days=int(days_window))
+            ).isoformat()
+            where_clauses.append("a.created_at >= ?")
+            params.append(cutoff_iso)
 
         if category and category not in ("Semua Event", "all", ""):
             where_clauses.append("a.category = ?")
@@ -855,6 +868,12 @@ class DatabaseManager:
             ).fetchone()
             total = int(total_row["cnt"]) if total_row else 0
 
+            db_total_row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM alerts WHERE device_id = ?",
+                (clean_id,),
+            ).fetchone()
+            db_total = int(db_total_row["cnt"]) if db_total_row else total
+
             rows = conn.execute(
                 f"""
                 SELECT a.*,
@@ -873,7 +892,14 @@ class DatabaseManager:
             ).fetchall()
 
         items = [self._format_alert_row(dict(r)) for r in rows]
-        return {"total": total, "items": items, "limit": limit, "offset": offset}
+        return {
+            "total": total,
+            "db_total": db_total,
+            "days_window": days_window,
+            "items": items,
+            "limit": limit,
+            "offset": offset,
+        }
 
     def acknowledge_alert(
         self, device_id: str, alert_id: int, acknowledged_by: str = "Ibu Siti Rahayu"
@@ -936,32 +962,127 @@ class DatabaseManager:
         return row
 
     def list_telemetry(
-        self, device_id: str, limit: int = 24, offset: int = 0
+        self,
+        device_id: str,
+        limit: int = 24,
+        offset: int = 0,
+        reset_after_offline: bool = True,
+        days_window: int | None = 3,
     ) -> list[dict[str, Any]]:
+        """Return telemetry points for trend chart (ascending time).
+
+        When reset_after_offline=True:
+        - If device is currently 'offline', returns [] so the trend chart resets immediately.
+        - If device went offline previously, returns only telemetry recorded after the last offline event.
+        """
         clean_id = validate_device_id(device_id)
         limit = max(1, min(200, int(limit)))
         offset = max(0, int(offset))
         with self._lock:
             conn = self._get_sqlite_conn()
+            if reset_after_offline:
+                dev_row = conn.execute(
+                    "SELECT status FROM devices WHERE device_id = ?", (clean_id,)
+                ).fetchone()
+                if dev_row and dev_row["status"] != "online":
+                    return []
+
+                last_off = conn.execute(
+                    """
+                    SELECT recorded_at FROM device_status_history
+                    WHERE device_id = ? AND status = 'offline'
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (clean_id,),
+                ).fetchone()
+            else:
+                last_off = None
+
+            where_clauses = ["device_id = ?"]
+            params: list[Any] = [clean_id]
+
+            if days_window is not None and days_window > 0:
+                cutoff_iso = (
+                    datetime.now(timezone.utc) - timedelta(days=int(days_window))
+                ).isoformat()
+                where_clauses.append("recorded_at >= ?")
+                params.append(cutoff_iso)
+
+            if last_off and last_off["recorded_at"]:
+                where_clauses.append("recorded_at > ?")
+                params.append(last_off["recorded_at"])
+
+            where_sql = " AND ".join(where_clauses)
             rows = conn.execute(
-                """
+                f"""
                 SELECT * FROM telemetry
-                WHERE device_id = ?
+                WHERE {where_sql}
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?
                 """,
-                (clean_id, limit, offset),
+                tuple(params + [limit, offset]),
             ).fetchall()
+
         result = []
         for r in reversed(rows):
             d = dict(r)
             d["finger_detected"] = bool(d.get("finger_detected"))
             d["sos_active"] = bool(d.get("sos_active"))
             d["fall_candidate"] = bool(d.get("fall_candidate"))
-            time_wib, _ = format_wib_time(d.get("recorded_at"))
+            time_wib, day_label = format_wib_time(d.get("recorded_at"))
             d["time_wib"] = time_wib[:5]
+            d["time_wib_full"] = time_wib
+            d["day_label"] = day_label
             result.append(d)
         return result
+
+    def list_telemetry_history(
+        self, device_id: str, limit: int = 30, offset: int = 0, days_window: int | None = 3
+    ) -> dict[str, Any]:
+        """Return newest-first telemetry history (BPM & SpO2 log) for the 3-day dashboard tab."""
+        clean_id = validate_device_id(device_id)
+        limit = max(1, min(200, int(limit)))
+        offset = max(0, int(offset))
+        where_clauses = ["device_id = ?"]
+        params: list[Any] = [clean_id]
+
+        if days_window is not None and days_window > 0:
+            cutoff_iso = (
+                datetime.now(timezone.utc) - timedelta(days=int(days_window))
+            ).isoformat()
+            where_clauses.append("recorded_at >= ?")
+            params.append(cutoff_iso)
+
+        where_sql = " AND ".join(where_clauses)
+        with self._lock:
+            conn = self._get_sqlite_conn()
+            total_row = conn.execute(
+                f"SELECT COUNT(*) AS cnt FROM telemetry WHERE {where_sql}",
+                tuple(params),
+            ).fetchone()
+            total = int(total_row["cnt"]) if total_row else 0
+
+            rows = conn.execute(
+                f"""
+                SELECT * FROM telemetry
+                WHERE {where_sql}
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+                """,
+                tuple(params + [limit, offset]),
+            ).fetchall()
+
+        items = []
+        for r in rows:
+            d = dict(r)
+            d["finger_detected"] = bool(d.get("finger_detected"))
+            d["sos_active"] = bool(d.get("sos_active"))
+            d["fall_candidate"] = bool(d.get("fall_candidate"))
+            time_wib, day_label = format_wib_time(d.get("recorded_at"))
+            d["time_wib"] = time_wib
+            d["day_label"] = day_label
+            items.append(d)
+        return {"total": total, "days_window": days_window, "items": items}
 
 
 db = DatabaseManager()

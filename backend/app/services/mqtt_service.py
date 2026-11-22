@@ -10,6 +10,7 @@ from typing import Any, Callable
 from app.core.config import settings
 from app.core.security import validate_device_id
 from app.database import db
+from app.services.ml_service import ml_service
 from app.services.telegram_service import telegram_service
 
 logger = logging.getLogger("biopulse.mqtt")
@@ -209,6 +210,7 @@ class MQTTService:
             password=settings.mqtt_password,
         )
         self._thread: threading.Thread | None = None
+        self._last_vital_alert_ts: dict[str, float] = {}
 
     @property
     def is_connected(self) -> bool:
@@ -233,6 +235,7 @@ class MQTTService:
             f"{prefix}/+/heartbeat",
             f"{prefix}/+/status",
             f"{prefix}/+/alert",
+            f"{prefix}/+/imu_window",
         ]
         self._thread = threading.Thread(
             target=self._client.connect_and_loop,
@@ -273,6 +276,23 @@ class MQTTService:
             updated_dev = db.get_device(device_id)
             self._emit_ws("telemetry", {"telemetry": saved, "device": updated_dev})
 
+            # Lapisan ML opsional (Isolation Forest BPM/SpO2, jendela 5 menit)
+            vital_res = ml_service.feed_telemetry(device_id, saved)
+            if vital_res and vital_res.get("should_alert"):
+                self._trigger_alert(
+                    device_id=device_id,
+                    alert_type="ML_VITAL_PATTERN",
+                    category="Perhatian & Peringatan",
+                    urgency="Perhatian",
+                    title="Pola BPM/SpO2 Tidak Biasa (Indikasi Model)",
+                    description=(
+                        f"Model Isolation Forest menandai pola rata-rata 5 menit yang menyimpang dari baseline "
+                        f"(BPM rata-rata {vital_res['bpm_mean']}, SpO2 estimasi {vital_res['spo2_mean']}%). "
+                        "Ini hanya indikasi, bukan diagnosis. Mohon cek kondisi pengguna secara langsung."
+                    ),
+                    detection_method="Isolation Forest (ML)",
+                )
+
             # Automatic rule-based edge detection if sos_active or fall_candidate transitioned to True
             if saved["sos_active"] and not prev_dev.get("sos_active"):
                 self._trigger_alert(
@@ -287,18 +307,98 @@ class MQTTService:
                     ),
                 )
             if saved["fall_candidate"] and not prev_dev.get("fall_candidate"):
-                self._trigger_alert(
-                    device_id=device_id,
-                    alert_type="FALL_CANDIDATE",
-                    category="Perhatian & Peringatan",
-                    urgency="Perhatian",
-                    title="Dugaan Jatuh / Hentakan Kuat Terdeteksi",
-                    description=(
-                        f"Rule-Based MPU6050 mendeteksi lonjakan percepatan {saved['accel_mag']} m/s² "
-                        f"(ambang {settings.fall_impact_threshold_ms2} m/s²). Segera periksa kondisi pengguna."
-                    ),
-                )
+                raw_bpm_fall = int(saved.get("raw_bpm") or 0)
+                has_bpm_spike = bool(saved.get("finger_detected") and raw_bpm_fall >= 115)
+                if has_bpm_spike:
+                    self._trigger_alert(
+                        device_id=device_id,
+                        alert_type="FALL_CANDIDATE",
+                        category="Perhatian & Peringatan",
+                        urgency="Perhatian",
+                        title="Prioritas Tinggi: Dugaan Jatuh + Lonjakan Detak Jantung",
+                        description=(
+                            f"Sensor MPU6050 mendeteksi hentakan {saved['accel_mag']} m/s² disertai lonjakan "
+                            f"detak jantung drastis ({raw_bpm_fall} BPM). Segera periksa kondisi pengguna!"
+                        ),
+                        detection_method="Sensor Fusion (MPU6050 + MAX30102)",
+                    )
+                else:
+                    self._trigger_alert(
+                        device_id=device_id,
+                        alert_type="FALL_CANDIDATE",
+                        category="Perhatian & Peringatan",
+                        urgency="Perhatian",
+                        title="Dugaan Jatuh / Hentakan Kuat Terdeteksi",
+                        description=(
+                            f"Rule-Based MPU6050 mendeteksi lonjakan percepatan {saved['accel_mag']} m/s² "
+                            f"(ambang {settings.fall_impact_threshold_ms2} m/s²). Segera periksa kondisi pengguna."
+                        ),
+                    )
+
+            # Deteksi indikasi anomali BPM & SpO2 (Rule-Based Threshold saat jari terdeteksi)
+            raw_bpm = int(saved.get("raw_bpm") or 0)
+            raw_spo2 = int(saved.get("raw_spo2") or 0)
+            if saved.get("finger_detected") and (raw_bpm > 0 or raw_spo2 > 0):
+                issues: list[str] = []
+                if 0 < raw_bpm < 50:
+                    issues.append(f"BPM rendah ({raw_bpm} BPM < 50)")
+                elif raw_bpm > 115:
+                    issues.append(f"BPM tinggi ({raw_bpm} BPM > 115)")
+                if 0 < raw_spo2 < 94:
+                    issues.append(f"SpO2 rendah ({raw_spo2}% < 94%)")
+
+                now_ts = time.time()
+                if issues and (now_ts - self._last_vital_alert_ts.get(device_id, 0.0) >= 60.0):
+                    self._last_vital_alert_ts[device_id] = now_ts
+                    issue_str = " & ".join(issues)
+                    self._trigger_alert(
+                        device_id=device_id,
+                        alert_type="VITAL_ANOMALY",
+                        category="Perhatian & Peringatan",
+                        urgency="Perhatian",
+                        title=f"Indikasi Anomali Tanda Vital: {issue_str}",
+                        description=(
+                            f"Sensor MAX30102 membaca {issue_str} (BPM: {raw_bpm}, SpO2: {raw_spo2}%). "
+                            "Nilai ini merupakan indikasi awal sensor (bukan diagnosis medis). "
+                            "Mohon periksa posisi gelang dan kondisi pengguna."
+                        ),
+                        detection_method="Rule-Based Vital",
+                    )
             return saved
+
+        if channel == "imu_window":
+            res = ml_service.predict_fall(device_id, data)
+            self._emit_ws("ml_fall", {"device_id": device_id, "result": res})
+            if res.get("should_alert"):
+                if res.get("bpm_spike"):
+                    self._trigger_alert(
+                        device_id=device_id,
+                        alert_type="ML_FALL_SUSPECTED",
+                        category="Perhatian & Peringatan",
+                        urgency="Perhatian",
+                        title="Prioritas Tinggi: Dugaan Jatuh (ML) + Lonjakan BPM",
+                        description=(
+                            f"Random Forest menilai pola gerak 3 detik mirip jatuh (skor {res['p_fall']}, "
+                            f"ambang {res['threshold']}; |a| maks {res['acc_mag_max']} m/s²) dan disertai "
+                            f"lonjakan detak jantung ({res.get('latest_bpm')} BPM). Segera periksa pengguna!"
+                        ),
+                        detection_method="ML + Vital Fusion",
+                    )
+                else:
+                    self._trigger_alert(
+                        device_id=device_id,
+                        alert_type="ML_FALL_SUSPECTED",
+                        category="Perhatian & Peringatan",
+                        urgency="Perhatian",
+                        title="Dugaan Jatuh Terdeteksi Model ML",
+                        description=(
+                            f"Random Forest menilai pola gerak 3 detik mirip jatuh (skor {res['p_fall']}, "
+                            f"ambang {res['threshold']}; |a| maks {res['acc_mag_max']} m/s²). "
+                            "Ini indikasi, bukan kepastian. Segera periksa kondisi pengguna."
+                        ),
+                        detection_method="Random Forest (ML)",
+                    )
+            return res
 
         if channel == "heartbeat":
             updated_dev = db.record_heartbeat(data)
@@ -376,6 +476,7 @@ class MQTTService:
         description: str,
         action_type: str = "Tinjau",
         device_timestamp: str | None = None,
+        detection_method: str = "Rule-Based",
     ) -> dict[str, Any]:
         notif_info = telegram_service.send_alert_notification(
             device_id=device_id,
@@ -391,7 +492,7 @@ class MQTTService:
             urgency=urgency,
             title=title,
             description=description,
-            detection_method="Rule-Based",
+            detection_method=detection_method,
             action_type=action_type,
             notif_info=notif_info,
             device_timestamp=device_timestamp,

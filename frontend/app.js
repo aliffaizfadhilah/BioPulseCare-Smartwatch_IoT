@@ -8,6 +8,7 @@
   const DEVICE_ID = "bp-device-001";
   let currentCategory = "Semua Event";
   let currentSearch = "";
+  let activeTab = "events"; // "events" | "vitals"
   let activeModalAlert = null;
   let toastTimeout = null;
   let currentDeviceStatus = "online";
@@ -28,6 +29,36 @@
       box.classList.add("hidden");
       box.classList.remove("flex");
     }, 4000);
+  }
+
+  function switchTab(tabName) {
+    activeTab = tabName;
+    const btnEvents = el("tab-btn-events");
+    const btnVitals = el("tab-btn-vitals");
+    const panelEvents = el("tab-panel-events");
+    const panelVitals = el("tab-panel-vitals");
+
+    if (!btnEvents || !btnVitals || !panelEvents || !panelVitals) return;
+
+    if (tabName === "vitals") {
+      btnVitals.className =
+        "inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-label-md text-label-sm font-semibold shadow-sm transition-all";
+      btnEvents.className =
+        "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-on-surface-variant hover:text-on-surface font-label-md text-label-sm font-semibold transition-all";
+      panelEvents.classList.add("hidden");
+      panelEvents.classList.remove("flex");
+      panelVitals.classList.remove("hidden");
+      panelVitals.classList.add("flex");
+    } else {
+      btnEvents.className =
+        "inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-label-md text-label-sm font-semibold shadow-sm transition-all";
+      btnVitals.className =
+        "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-on-surface-variant hover:text-on-surface font-label-md text-label-sm font-semibold transition-all";
+      panelVitals.classList.add("hidden");
+      panelVitals.classList.remove("flex");
+      panelEvents.classList.remove("hidden");
+      panelEvents.classList.add("flex");
+    }
   }
 
   function createIconSpan(iconName, extraClasses) {
@@ -107,6 +138,10 @@
     if (optAll && typeof alertsData.total === "number") {
       optAll.textContent = "Semua Event (" + alertsData.total + ")";
     }
+    const badgeCountEvents = el("badge-count-events");
+    if (badgeCountEvents && typeof alertsData.total === "number") {
+      badgeCountEvents.textContent = String(alertsData.total);
+    }
 
     const items = alertsData.items || [];
     if (items.length === 0) {
@@ -114,7 +149,7 @@
       const td = document.createElement("td");
       td.colSpan = 5;
       td.className = "py-6 text-center text-on-surface-variant";
-      td.textContent = "Tidak ada event yang sesuai dengan filter pencarian.";
+      td.textContent = "Tidak ada event dalam 3 hari terakhir yang sesuai dengan filter pencarian.";
       tr.appendChild(td);
       tbody.appendChild(tr);
       return;
@@ -185,6 +220,117 @@
       tr.appendChild(tdDesc);
       tr.appendChild(tdTg);
       tr.appendChild(tdAct);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderVitalsHistoryTable(vitalsData) {
+    const tbody = el("vitals-table-body");
+    if (!tbody) return;
+    tbody.replaceChildren();
+
+    const badgeCountVitals = el("badge-count-vitals");
+    if (badgeCountVitals && vitalsData && typeof vitalsData.total === "number") {
+      badgeCountVitals.textContent = String(vitalsData.total);
+    }
+
+    const items = (vitalsData && vitalsData.items) || [];
+    if (items.length === 0) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 6;
+      td.className = "py-6 text-center text-on-surface-variant";
+      td.textContent = "Belum ada riwayat detak jantung & kadar oksigen dalam 3 hari terakhir.";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    items.forEach((row) => {
+      const tr = document.createElement("tr");
+      tr.className = "hover:bg-surface-container-low/30 transition-colors";
+
+      // 1. Waktu (WIB)
+      const tdTime = document.createElement("td");
+      tdTime.className = "py-3 px-3 align-middle whitespace-nowrap";
+      const tMain = document.createElement("div");
+      tMain.className = "font-semibold text-on-surface";
+      tMain.textContent = row.time_wib || "--:--:--";
+      const tSub = document.createElement("div");
+      tSub.className = "text-[11px] text-on-surface-variant";
+      tSub.textContent = row.day_label || "Hari Ini";
+      tdTime.appendChild(tMain);
+      tdTime.appendChild(tSub);
+
+      // 2. Detak Jantung (BPM)
+      const tdBpm = document.createElement("td");
+      tdBpm.className = "py-3 px-4 align-middle";
+      const bpmVal = document.createElement("span");
+      bpmVal.className = "font-bold text-on-surface text-body-md";
+      bpmVal.textContent = row.bpm > 0 ? row.bpm + " BPM" : "-- BPM";
+      tdBpm.appendChild(bpmVal);
+
+      // 3. Kadar Oksigen (SpO2)
+      const tdSpo2 = document.createElement("td");
+      tdSpo2.className = "py-3 px-4 align-middle";
+      const spo2Val = document.createElement("span");
+      spo2Val.className = "font-bold text-primary text-body-md";
+      spo2Val.textContent = row.spo2 > 0 ? row.spo2 + " %" : "-- %";
+      tdSpo2.appendChild(spo2Val);
+
+      // 4. Kontak Jari
+      const tdFinger = document.createElement("td");
+      tdFinger.className = "py-3 px-4 align-middle";
+      const fingerPill = document.createElement("span");
+      if (row.finger_detected) {
+        fingerPill.className =
+          "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary-fixed/40 text-on-secondary-container text-[12px] font-semibold";
+        fingerPill.textContent = "Terdeteksi";
+      } else {
+        fingerPill.className =
+          "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[12px] font-medium";
+        fingerPill.textContent = "Jari Tidak Ada";
+      }
+      tdFinger.appendChild(fingerPill);
+
+      // 5. Akselerasi Gerak
+      const tdAcc = document.createElement("td");
+      tdAcc.className = "py-3 px-4 align-middle text-on-surface-variant";
+      tdAcc.textContent = Number(row.accel_mag || 9.8).toFixed(2) + " m/s²";
+
+      // 6. Status Indikasi
+      const tdStatus = document.createElement("td");
+      tdStatus.className = "py-3 px-3 align-middle text-right";
+      const stBadge = document.createElement("span");
+      if (row.sos_active) {
+        stBadge.className =
+          "inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#fee2e2] text-[#b91a24] text-[12px] font-semibold";
+        stBadge.textContent = "Darurat SOS";
+      } else if (row.fall_candidate) {
+        stBadge.className =
+          "inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#fef3c7] text-[#b45309] text-[12px] font-semibold";
+        stBadge.textContent = "Dugaan Jatuh";
+      } else if (
+        row.finger_detected &&
+        ((row.bpm > 0 && (row.bpm < 50 || row.bpm > 115)) ||
+          (row.spo2 > 0 && row.spo2 < 94))
+      ) {
+        stBadge.className =
+          "inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#fef3c7] text-[#b45309] text-[12px] font-semibold";
+        stBadge.textContent = "Indikasi Anomali Vital";
+      } else {
+        stBadge.className =
+          "inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#dcfce7] text-[#15803d] text-[12px] font-semibold";
+        stBadge.textContent = "Stabil & Normal";
+      }
+      tdStatus.appendChild(stBadge);
+
+      tr.appendChild(tdTime);
+      tr.appendChild(tdBpm);
+      tr.appendChild(tdSpo2);
+      tr.appendChild(tdFinger);
+      tr.appendChild(tdAcc);
+      tr.appendChild(tdStatus);
       tbody.appendChild(tr);
     });
   }
@@ -262,28 +408,47 @@
     }
 
     // Vital cards
+    const curBpm = Number(device.last_bpm ?? 78);
+    const curSpo2 = Number(device.last_spo2 ?? 98);
     const valBpm = el("val-bpm");
-    if (valBpm) valBpm.textContent = isOffline ? "--" : String(device.last_bpm ?? 78);
+    if (valBpm) valBpm.textContent = isOffline ? "--" : String(curBpm);
     const badgeBpmText = el("badge-bpm-text");
     if (badgeBpmText) {
-      badgeBpmText.textContent = isOffline
-        ? "Perangkat Offline"
-        : !device.finger_detected
-        ? "Tempelkan Jari (Estimasi Terakhir)"
-        : "Normal & Tenang";
+      if (isOffline) {
+        badgeBpmText.textContent = "Menunggu Koneksi";
+      } else if (curBpm > 0 && curBpm < 50) {
+        badgeBpmText.textContent = "Indikasi BPM Rendah (<50)";
+      } else if (curBpm > 115) {
+        badgeBpmText.textContent = "Indikasi BPM Tinggi (>115)";
+      } else if (!device.finger_detected) {
+        badgeBpmText.textContent = "Tempelkan Jari (Estimasi Terakhir)";
+      } else {
+        badgeBpmText.textContent = "Normal & Tenang";
+      }
     }
 
     const valSpo2 = el("val-spo2");
-    if (valSpo2) valSpo2.textContent = isOffline ? "--" : String(device.last_spo2 ?? 98);
+    if (valSpo2) valSpo2.textContent = isOffline ? "--" : String(curSpo2);
     const badgeSpo2Text = el("badge-spo2-text");
     if (badgeSpo2Text) {
-      badgeSpo2Text.textContent = isOffline ? "Perangkat Offline" : "Sangat Baik";
+      if (isOffline) {
+        badgeSpo2Text.textContent = "Menunggu Koneksi";
+      } else if (curSpo2 > 0 && curSpo2 < 94) {
+        badgeSpo2Text.textContent = "Indikasi SpO2 Rendah (<94%)";
+      } else {
+        badgeSpo2Text.textContent = "Saturasi Optimal";
+      }
     }
 
     const valPosture = el("val-posture");
     const subPosture = el("sub-posture");
     if (valPosture && subPosture) {
-      if (device.sos_active) {
+      if (isOffline) {
+        valPosture.textContent = "--";
+        valPosture.className =
+          "font-metric-numeral text-headline-lg text-on-surface-variant font-bold block leading-tight";
+        subPosture.textContent = "Menunggu Sinyal Sensor";
+      } else if (device.sos_active) {
         valPosture.textContent = "SOS Aktif";
         valPosture.className =
           "font-metric-numeral text-headline-lg text-tertiary font-bold block leading-tight";
@@ -301,10 +466,55 @@
       }
     }
 
-    // Update SVG Trend Chart
-    if (Array.isArray(series) && series.length >= 2) {
-      const step = 800 / Math.max(1, series.length - 1);
-      const coords = series.map((pt, idx) => {
+    // Update SVG Trend Chart (Otomatis Ke-reset Setelah Offline!)
+    const polyEl = el("trend-polyline");
+    const areaEl = el("trend-polygon");
+    const dotMid = el("trend-dot-mid");
+    const dotEnd = el("trend-dot-end");
+    const trendPill = el("trend-status-pill");
+    const emptyOverlay = el("trend-empty-overlay");
+    const emptyText = el("trend-empty-text");
+    const startLabel = el("trend-start-label");
+    const nowLabel = el("trend-now-label");
+
+    if (isOffline || !Array.isArray(series) || series.length === 0) {
+      // Reset chart state when offline or right after offline before new data arrives
+      if (polyEl) polyEl.setAttribute("points", "0,92 800,92");
+      if (areaEl) areaEl.setAttribute("points", "0,100 0,92 800,92 800,100");
+      if (dotMid) {
+        dotMid.setAttribute("cx", "400");
+        dotMid.setAttribute("cy", "92");
+      }
+      if (dotEnd) {
+        dotEnd.setAttribute("cx", "800");
+        dotEnd.setAttribute("cy", "92");
+      }
+      if (trendPill) {
+        trendPill.textContent = isOffline
+          ? "Di-reset (Perangkat Offline)"
+          : "Sesi Baru (Menunggu Data)";
+        trendPill.className =
+          "font-label-sm text-label-sm text-on-surface-variant font-medium ml-2 px-2.5 py-0.5 rounded-full bg-surface-container-high";
+      }
+      if (emptyOverlay && emptyText) {
+        emptyOverlay.classList.remove("hidden");
+        emptyText.textContent = isOffline
+          ? "Grafik tren di-reset karena perangkat sedang offline."
+          : "Grafik tren telah di-reset setelah offline. Menunggu kiriman data baru dari gelang...";
+      }
+      if (startLabel) startLabel.textContent = "--:--";
+      if (nowLabel) nowLabel.textContent = "Sekarang (--:--)" ;
+    } else {
+      if (emptyOverlay) emptyOverlay.classList.add("hidden");
+      if (trendPill) {
+        trendPill.textContent = "Stabil & Normal";
+        trendPill.className =
+          "font-label-sm text-label-sm text-secondary font-medium ml-2 px-2.5 py-0.5 rounded-full bg-secondary-fixed/30";
+      }
+
+      const pts = series.length === 1 ? [series[0], series[0]] : series;
+      const step = 800 / Math.max(1, pts.length - 1);
+      const coords = pts.map((pt, idx) => {
         const x = Math.round(idx * step);
         const bpm = Number(pt.bpm || 78);
         const y = Math.max(15, Math.min(88, Math.round(100 - ((bpm - 50) / 80) * 70)));
@@ -313,15 +523,11 @@
       const polyStr = coords.map((c) => c.x + "," + c.y).join(" ");
       const areaStr = "0,100 " + polyStr + " 800,100";
 
-      const polyEl = el("trend-polyline");
-      const areaEl = el("trend-polygon");
       if (polyEl) polyEl.setAttribute("points", polyStr);
       if (areaEl) areaEl.setAttribute("points", areaStr);
 
       const mid = coords[Math.floor(coords.length / 2)];
       const last = coords[coords.length - 1];
-      const dotMid = el("trend-dot-mid");
-      const dotEnd = el("trend-dot-end");
       if (dotMid && mid) {
         dotMid.setAttribute("cx", String(mid.x));
         dotMid.setAttribute("cy", String(mid.y));
@@ -330,11 +536,12 @@
         dotEnd.setAttribute("cx", String(last.x));
         dotEnd.setAttribute("cy", String(last.y));
       }
-    }
-
-    const nowLabel = el("trend-now-label");
-    if (nowLabel && device.last_seen_wib) {
-      nowLabel.textContent = "Sekarang (" + device.last_seen_wib.replace(" WIB", "") + ")";
+      if (startLabel && series[0].time_wib) {
+        startLabel.textContent = "Mulai (" + series[0].time_wib + " WIB)";
+      }
+      if (nowLabel && series[series.length - 1].time_wib) {
+        nowLabel.textContent = "Terakhir (" + series[series.length - 1].time_wib + " WIB)";
+      }
     }
   }
 
@@ -372,6 +579,7 @@
         device_id: DEVICE_ID,
         category: currentCategory,
         q: currentSearch,
+        days: "3",
       });
       const res = await fetch("/api/dashboard/summary?" + params.toString(), {
         headers: { Accept: "application/json" },
@@ -381,6 +589,7 @@
       const data = await res.json();
       renderDeviceHeroAndCards(data.device, data.telemetry_series);
       renderEventTable(data.alerts || { items: [], total: 0 });
+      renderVitalsHistoryTable(data.telemetry_history || { items: [], total: 0 });
     } catch {
       // Silent retry on next cycle
     }
@@ -429,7 +638,7 @@
 
     ws.onopen = function () {
       if (wsDot) wsDot.className = "w-2 h-2 rounded-full bg-secondary";
-      if (wsLabel) wsLabel.textContent = "Live WebSocket";
+      if (wsLabel) wsLabel.textContent = "Sinkronisasi Real-time Aktif";
     };
 
     ws.onmessage = function (evt) {
@@ -455,11 +664,23 @@
     const btnBuzzer = el("btn-buzzer");
     if (btnBuzzer) btnBuzzer.addEventListener("click", () => postCommand("buzzer"));
 
-    const btnVoice = el("btn-voice-msg");
-    if (btnVoice) btnVoice.addEventListener("click", () => postCommand("voice_ping"));
-
     const btnReset = el("btn-reset-alarm");
     if (btnReset) btnReset.addEventListener("click", () => postCommand("reset_alarm"));
+
+    const tabEvents = el("tab-btn-events");
+    if (tabEvents) tabEvents.addEventListener("click", () => switchTab("events"));
+
+    const tabVitals = el("tab-btn-vitals");
+    if (tabVitals) tabVitals.addEventListener("click", () => switchTab("vitals"));
+
+    const jumpVitals = el("btn-jump-vitals-tab");
+    if (jumpVitals) {
+      jumpVitals.addEventListener("click", () => {
+        switchTab("vitals");
+        const sec = el("section-log-event");
+        if (sec) sec.scrollIntoView({ behavior: "smooth" });
+      });
+    }
 
     const btnTgTest = el("btn-telegram-test");
     if (btnTgTest) {
@@ -472,7 +693,7 @@
           });
           if (res.ok) {
             const data = await res.json();
-            showToast("Bot @BioPulseCare_bot: " + data.notification.status_label);
+            showToast("Bot Telegram: " + data.notification.status_label);
             refreshDashboard();
           } else {
             showToast("Tunggu beberapa saat sebelum mengirim uji Telegram lagi.");

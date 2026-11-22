@@ -116,6 +116,37 @@ class BioPulseBackendTestCase(unittest.TestCase):
         )
         self.assertIn(status, (HTTPStatus.BAD_REQUEST, HTTPStatus.NOT_FOUND))
 
+    def test_06_three_day_dashboard_window_and_trend_reset_after_offline(self) -> None:
+        # Insert an alert dated 5 days ago directly in DB -> must stay in DB (db_total) but be excluded from 3-day dashboard view
+        old_iso = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        with db._lock:
+            conn = db._get_sqlite_conn()
+            conn.execute(
+                """
+                INSERT INTO alerts (
+                    device_id, alert_type, category, urgency, title, description,
+                    detection_method, action_type, acknowledged, device_timestamp, created_at
+                ) VALUES (?, 'OLD_EVENT', 'Urgensi Normal', 'Normal', 'Event 5 Hari Lalu', 'Tersimpan di DB', 'Rule-Based', 'Detail', 0, ?, ?)
+                """,
+                ("bp-device-001", old_iso, old_iso),
+            )
+            conn.commit()
+
+        alerts_3d = db.list_alerts("bp-device-001", days_window=3)
+        self.assertGreater(alerts_3d["db_total"], alerts_3d["total"])
+        self.assertFalse(any(a["title"] == "Event 5 Hari Lalu" for a in alerts_3d["items"]))
+
+        # Verify trend chart resets after offline
+        mqtt_service.handle_mqtt_message(
+            "status",
+            {"device_id": "bp-device-001", "status": "offline", "reason": "lwt"},
+        )
+        _, summary_off = dispatch_api_request("GET", "/api/dashboard/summary", {})
+        self.assertEqual(summary_off["telemetry_series"], [])
+        self.assertEqual(summary_off["recent_activities"], [])
+        self.assertIn("telemetry_history", summary_off)
+        self.assertGreater(summary_off["telemetry_history"]["total"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

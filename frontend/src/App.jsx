@@ -12,6 +12,7 @@ import { useDashboardSocket } from "./hooks/useDashboardSocket";
 export default function App() {
   const [deviceId] = useState("bp-device-001");
   const [summary, setSummary] = useState(null);
+  const [activeTab, setActiveTab] = useState("events"); // "events" | "vitals"
   const [category, setCategory] = useState("Semua Event");
   const [searchQ, setSearchQ] = useState("");
   const [toastMsg, setToastMsg] = useState("");
@@ -118,23 +119,31 @@ export default function App() {
 
   const chartPoints = useMemo(() => {
     const series = summary?.telemetry_series || [];
-    if (!series.length) return { poly: "0,60 400,52 800,50", area: "0,100 0,60 400,52 800,50 800,100" };
-    const step = 800 / Math.max(1, series.length - 1);
-    const pts = series.map((pt, i) => {
+    if (isOffline || !series.length) {
+      return {
+        isReset: true,
+        poly: "0,92 800,92",
+        area: "0,100 0,92 800,92 800,100",
+      };
+    }
+    const ptsList = series.length === 1 ? [series[0], series[0]] : series;
+    const step = 800 / Math.max(1, ptsList.length - 1);
+    const pts = ptsList.map((pt, i) => {
       const x = Math.round(i * step);
       const bpm = Number(pt.bpm || 78);
       const y = Math.max(15, Math.min(88, Math.round(100 - ((bpm - 50) / 80) * 70)));
       return `${x},${y}`;
     });
     const poly = pts.join(" ");
-    return { poly, area: `0,100 ${poly} 800,100` };
-  }, [summary]);
+    return { isReset: false, poly, area: `0,100 ${poly} 800,100` };
+  }, [summary, isOffline]);
 
   const alertsList = summary?.alerts?.items || [];
+  const vitalsList = summary?.telemetry_history?.items || [];
 
   return (
     <div className="bg-surface font-body-md text-on-surface min-h-screen">
-      {/* Header Stitch */}
+      {/* Header (Tanpa duplikasi badge status yang sudah ada di Hero Card) */}
       <header className="fixed top-0 right-0 left-0 h-16 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 px-space-md flex items-center justify-between">
         <div className="flex items-center gap-space-md">
           <div className="flex items-center gap-2">
@@ -147,28 +156,6 @@ export default function App() {
               {device.patient_relation}: <strong>{device.patient_name}</strong>
             </span>
           </div>
-          <div
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${
-              isOffline
-                ? "bg-surface-container-high text-on-surface-variant"
-                : hasEmergency
-                ? "bg-[#fee2e2] text-[#b91a24]"
-                : "bg-secondary-fixed/50 text-on-secondary-container"
-            }`}
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${
-                isOffline ? "bg-outline" : hasEmergency ? "bg-tertiary" : "bg-secondary"
-              }`}
-            />
-            <span className="text-label-sm font-semibold">
-              {isOffline
-                ? "Perangkat Offline"
-                : hasEmergency
-                ? "Peringatan Awal Aktif"
-                : "Kondisi Sehat & Aman"}
-            </span>
-          </div>
         </div>
 
         <div className="flex items-center gap-space-md">
@@ -176,7 +163,7 @@ export default function App() {
             <span
               className={`w-2 h-2 rounded-full ${wsConnected ? "bg-secondary" : "bg-tertiary"}`}
             />
-            {wsConnected ? "Live WebSocket" : "Menyambung..."}
+            {wsConnected ? "Sinkronisasi Real-time Aktif" : "Menyambung..."}
           </span>
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-label-md">
@@ -203,13 +190,38 @@ export default function App() {
 
       <main className="w-full pt-20 bg-surface min-h-screen p-space-md lg:p-space-lg">
         <div className="flex flex-col w-full gap-space-lg max-w-7xl mx-auto">
-          {/* Hero Section */}
+          {/* 1. Hero Card (Tanpa tombol Kirim Suara) */}
           <section className="w-full bg-surface-container-lowest rounded-2xl shadow-sm p-space-lg flex flex-col md:flex-row md:items-center justify-between gap-space-md border border-secondary-fixed/50">
             <div className="flex flex-col gap-2 max-w-2xl">
-              <div className="inline-flex items-center gap-2 text-secondary text-label-md font-semibold">
-                <span className="material-symbols-outlined text-[20px]">verified</span>
-                <span>Pantauan Terkini ({device.device_id})</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${
+                    isOffline
+                      ? "bg-surface-container-high text-on-surface-variant"
+                      : hasEmergency
+                      ? "bg-[#fee2e2] text-[#b91a24]"
+                      : "bg-secondary-fixed/50 text-on-secondary-container"
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isOffline ? "bg-outline" : hasEmergency ? "bg-tertiary" : "bg-secondary"
+                    }`}
+                  />
+                  <span className="text-label-sm font-semibold">
+                    {isOffline
+                      ? "Perangkat Offline"
+                      : hasEmergency
+                      ? "Peringatan Awal Aktif"
+                      : "Kondisi Sehat & Aman"}
+                  </span>
+                </div>
+                <span className="inline-flex items-center gap-1 text-[12px] text-on-surface-variant/80 bg-surface-container-low px-2.5 py-0.5 rounded-full">
+                  <span className="material-symbols-outlined text-[14px] text-primary">info</span>
+                  <span>Indikasi & Peringatan Awal (Bukan Diagnosis Medis)</span>
+                </span>
               </div>
+
               <h1 className="text-headline-lg text-on-surface tracking-tight font-bold">
                 {isOffline
                   ? "Perangkat sedang offline. Silakan periksa daya gelang dan lakukan pengecekan langsung."
@@ -224,34 +236,23 @@ export default function App() {
                   <span className="material-symbols-outlined text-[18px] text-secondary">
                     battery_charging_full
                   </span>
-                  Baterai Gelang {device.battery_pct}% (Estimasi)
+                  Baterai Gelang {device.battery_pct}%
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[18px] text-primary">wifi</span>
-                  {isOffline ? "Gelang Terputus (LWT/Timeout)" : "Gelang Terhubung"}
+                  {isOffline ? "Gelang Terputus (Offline)" : "Gelang Terhubung"}
                 </span>
               </div>
-              <p className="text-[12px] text-on-surface-variant/80 pt-1">
-                *Catatan Non-Medis: Seluruh pembacaan BPM, SpO2, dan gerak merupakan indikasi/estimasi sensor awal, bukan diagnosis medis.
-              </p>
             </div>
 
-            <div className="flex flex-row sm:flex-col gap-space-xs min-w-[220px]">
+            <div className="flex flex-row sm:flex-col gap-space-xs min-w-[210px]">
               <button
                 type="button"
                 onClick={() => handleCommand("buzzer")}
-                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary text-on-primary text-label-md shadow-sm hover:opacity-90 transition-all"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-primary text-on-primary text-label-md shadow-sm hover:opacity-90 transition-all"
               >
                 <span className="material-symbols-outlined text-[20px]">ring_volume</span>
                 <span>Bunyikan Gelang</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleCommand("voice_ping")}
-                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-surface-container text-on-surface text-label-md hover:bg-surface-container-high transition-colors"
-              >
-                <span className="material-symbols-outlined text-[20px] text-primary">mic</span>
-                <span>Kirim Suara</span>
               </button>
               {hasEmergency ? (
                 <button
@@ -260,18 +261,18 @@ export default function App() {
                   className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#fee2e2] text-[#b91a24] text-label-md font-semibold"
                 >
                   <span className="material-symbols-outlined text-[18px]">restart_alt</span>
-                  <span>Reset Alarm</span>
+                  <span>Matikan Alarm</span>
                 </button>
               ) : null}
             </div>
           </section>
 
-          {/* 3 Metric Cards */}
+          {/* 2. Three Metric Cards */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-space-md">
             <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col justify-between border border-surface-container-high/40">
               <div className="flex items-center justify-between">
                 <span className="text-label-md text-on-surface-variant font-medium">
-                  Detak Jantung (Indikasi)
+                  Detak Jantung
                 </span>
                 <div className="w-10 h-10 rounded-full bg-tertiary-fixed flex items-center justify-center text-tertiary">
                   <span className="material-symbols-outlined text-[22px]">favorite</span>
@@ -287,14 +288,14 @@ export default function App() {
               </div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed/50 text-on-secondary-container text-label-sm font-semibold self-start">
                 <span className="material-symbols-outlined text-[16px]">check</span>
-                <span>{isOffline ? "Menunggu Sinyal" : "Normal & Tenang"}</span>
+                <span>{isOffline ? "Menunggu Koneksi" : "Normal & Tenang"}</span>
               </div>
             </div>
 
             <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col justify-between border border-surface-container-high/40">
               <div className="flex items-center justify-between">
                 <span className="text-label-md text-on-surface-variant font-medium">
-                  Kadar Oksigen (Estimasi SpO2)
+                  Kadar Oksigen (SpO2)
                 </span>
                 <div className="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[22px]">air</span>
@@ -310,7 +311,7 @@ export default function App() {
               </div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed/50 text-on-secondary-container text-label-sm font-semibold self-start">
                 <span className="material-symbols-outlined text-[16px]">done_all</span>
-                <span>{isOffline ? "Menunggu Sinyal" : "Sangat Baik"}</span>
+                <span>{isOffline ? "Menunggu Koneksi" : "Saturasi Optimal"}</span>
               </div>
             </div>
 
@@ -325,28 +326,32 @@ export default function App() {
               </div>
               <div className="my-space-md">
                 <span className="text-[2rem] leading-tight text-secondary font-bold block">
-                  {device.fall_candidate
+                  {isOffline
+                    ? "--"
+                    : device.fall_candidate
                     ? "Dugaan Jatuh"
                     : device.sos_active
                     ? "SOS Aktif"
                     : "Aman"}
                 </span>
                 <span className="text-body-sm text-on-surface-variant">
-                  {device.fall_candidate
+                  {isOffline
+                    ? "Menunggu Sinyal Sensor"
+                    : device.fall_candidate
                     ? `Lonjakan |a|=${device.last_accel_mag} m/s²`
                     : "Tidak Terdeteksi Jatuh"}
                 </span>
               </div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary text-on-secondary text-label-sm font-semibold self-start">
-                <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                <span>Sensor Aktif</span>
+                <span className="material-symbols-outlined text-[16px]">sensors</span>
+                <span>MPU6050 Aktif</span>
               </div>
             </div>
           </section>
 
-          {/* Trend Chart Section */}
+          {/* 3. Trend Chart Section (Ke-reset Setelah Offline) */}
           <section className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col gap-space-md border border-surface-container-high/40">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary text-[22px]">
                   show_chart
@@ -355,7 +360,7 @@ export default function App() {
                   Grafik Tren Hari Ini
                 </h2>
                 <span className="text-label-sm text-secondary font-medium ml-2 px-2.5 py-0.5 rounded-full bg-secondary-fixed/30">
-                  Stabil & Normal
+                  {chartPoints.isReset ? "Di-reset (Setelah Offline)" : "Stabil & Normal"}
                 </span>
               </div>
               <div className="flex items-center gap-2 text-label-sm">
@@ -378,12 +383,19 @@ export default function App() {
                   onClick={() => handleSimulate(isOffline ? "online" : "offline")}
                   className="px-2.5 py-1 rounded-lg bg-surface-container-high text-on-surface font-semibold"
                 >
-                  {isOffline ? "Set Online" : "Uji Offline LWT"}
+                  {isOffline ? "Pulihkan Online" : "Uji Offline LWT"}
                 </button>
               </div>
             </div>
 
             <div className="w-full h-32 relative bg-surface-container-low/40 rounded-xl p-2 overflow-hidden">
+              {chartPoints.isReset ? (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface-container-low/75">
+                  <span className="text-body-sm text-on-surface-variant font-medium px-3 py-1.5 rounded-full bg-white shadow-sm">
+                    Grafik tren telah di-reset setelah perangkat offline. Menunggu data baru...
+                  </span>
+                </div>
+              ) : null}
               <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 800 100">
                 <defs>
                   <linearGradient id="calmTrendFill" x1="0" x2="0" y1="0" y2="1">
@@ -402,15 +414,9 @@ export default function App() {
                 />
               </svg>
             </div>
-            <div className="flex items-center justify-between text-label-sm text-on-surface-variant px-1">
-              <span>Pagi (06.00)</span>
-              <span>Siang (12.00)</span>
-              <span>Sore (16.00)</span>
-              <span>Sekarang ({device.last_seen_wib || "10.42 WIB"})</span>
-            </div>
           </section>
 
-          {/* Telegram Notification Log & Event History */}
+          {/* 4. Two-Tab Section: Log Event & Riwayat Detak Jantung + SpO2 */}
           <section className="w-full bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col gap-5 border border-surface-container-high/40">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -418,13 +424,18 @@ export default function App() {
                   <span className="material-symbols-outlined text-[24px]">move_to_inbox</span>
                 </div>
                 <div>
-                  <h2 className="text-headline-md text-on-surface font-bold tracking-tight">
-                    Log Notifikasi Telegram & Riwayat Event
-                  </h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-headline-md text-on-surface font-bold tracking-tight">
+                      Log Notifikasi Telegram & Riwayat Sensor
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-full bg-surface-container text-primary text-[11px] font-semibold">
+                      Auto-Reset Tampilan 3 Hari (Tersimpan di Database)
+                    </span>
+                  </div>
                   <p className="text-body-sm text-on-surface-variant mt-0.5">
                     Sinkronisasi otomatis bot{" "}
-                    <span className="font-semibold text-primary">@BioPulseCare_bot</span> ke kanal
-                    darurat keluarga.
+                    <span className="font-semibold text-primary">@BioPulseCare_smartwach_bot</span>{" "}
+                    ke kanal darurat keluarga.
                   </p>
                 </div>
               </div>
@@ -438,101 +449,199 @@ export default function App() {
               </button>
             </div>
 
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 pt-1">
-              <div className="relative flex-1 max-w-lg">
-                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">
-                  search
-                </span>
-                <input
-                  type="text"
-                  value={searchQ}
-                  onChange={(e) => handleFilterChange(category, e.target.value)}
-                  placeholder="Cari event, kata kunci, atau metrik..."
-                  className="w-full pl-11 pr-4 py-2 bg-surface-container-low/50 hover:bg-surface-container-low focus:bg-white text-on-surface placeholder:text-on-surface-variant/70 border border-surface-container-high/60 rounded-xl text-body-sm outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <div className="flex items-center gap-2 self-end md:self-auto">
-                <span className="text-body-sm text-on-surface-variant font-medium">Kategori:</span>
-                <select
-                  value={category}
-                  onChange={(e) => handleFilterChange(e.target.value, searchQ)}
-                  className="bg-surface-container-low/50 border border-surface-container-high/60 text-on-surface text-body-sm rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-primary transition-all"
+            {/* 2-Tab Navigation */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-container-high/60 pb-3">
+              <div className="inline-flex p-1 rounded-xl bg-surface-container-low border border-surface-container-high/50">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("events")}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-label-sm font-semibold transition-all ${
+                    activeTab === "events"
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-on-surface-variant hover:text-on-surface"
+                  }`}
                 >
-                  <option value="Semua Event">Semua Event ({summary?.alerts?.total || 5})</option>
-                  <option value="Urgensi Normal">Urgensi Normal</option>
-                  <option value="Perhatian & Peringatan">Perhatian & Peringatan</option>
-                  <option value="Status Daya">Status Daya</option>
-                  <option value="Uji Sistem">Uji Sistem</option>
-                </select>
+                  <span className="material-symbols-outlined text-[18px]">notifications</span>
+                  <span>Log Event</span>
+                  <span className="px-2 py-0.5 rounded-full bg-black/10 text-[11px]">
+                    {summary?.alerts?.total || 0}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("vitals")}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-label-sm font-semibold transition-all ${
+                    activeTab === "vitals"
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-on-surface-variant hover:text-on-surface"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">monitor_heart</span>
+                  <span>Riwayat Detak Jantung & Kadar Oksigen</span>
+                  <span className="px-2 py-0.5 rounded-full bg-black/10 text-[11px]">
+                    {summary?.telemetry_history?.total || 0}
+                  </span>
+                </button>
               </div>
+              <span className="text-[12px] text-on-surface-variant">
+                Menampilkan maks. 3 hari terakhir di dashboard (data lengkap tersimpan di database).
+              </span>
             </div>
 
-            <div className="w-full overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[760px]">
-                <thead>
-                  <tr className="border-b border-surface-container-high/40 text-on-surface-variant text-label-sm uppercase tracking-wider">
-                    <th className="py-3 px-3 font-semibold w-[120px]">Waktu (WIB)</th>
-                    <th className="py-3 px-3 font-semibold w-[130px]">Tingkat Urgensi</th>
-                    <th className="py-3 px-4 font-semibold">Deskripsi Telemetri Sensor</th>
-                    <th className="py-3 px-4 font-semibold w-[220px]">
-                      Status Pengiriman Telegram
-                    </th>
-                    <th className="py-3 px-3 text-right font-semibold w-[90px]">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-container-high/40 text-on-surface text-body-sm">
-                  {alertsList.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-surface-container-low/30 transition-colors"
+            {activeTab === "events" ? (
+              <>
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                  <div className="relative flex-1 max-w-lg">
+                    <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">
+                      search
+                    </span>
+                    <input
+                      type="text"
+                      value={searchQ}
+                      onChange={(e) => handleFilterChange(category, e.target.value)}
+                      placeholder="Cari event, kata kunci, atau metrik..."
+                      className="w-full pl-11 pr-4 py-2 bg-surface-container-low/50 hover:bg-surface-container-low focus:bg-white text-on-surface placeholder:text-on-surface-variant/70 border border-surface-container-high/60 rounded-xl text-body-sm outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 self-end md:self-auto">
+                    <span className="text-body-sm text-on-surface-variant font-medium">
+                      Kategori:
+                    </span>
+                    <select
+                      value={category}
+                      onChange={(e) => handleFilterChange(e.target.value, searchQ)}
+                      className="bg-surface-container-low/50 border border-surface-container-high/60 text-on-surface text-body-sm rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-primary transition-all"
                     >
-                      <td className="py-3.5 px-3 align-top whitespace-nowrap">
-                        <div className="font-semibold text-on-surface">{item.time_wib}</div>
-                        <div className="text-[11px] text-on-surface-variant">{item.day_label}</div>
-                      </td>
-                      <td className="py-3.5 px-3 align-top">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container text-on-surface text-label-sm font-semibold">
-                          {item.urgency}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 align-top">
-                        <div className="font-semibold text-on-surface">{item.title}</div>
-                        <div className="text-on-surface-variant text-body-sm mt-0.5">
-                          {item.description}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 align-top">
-                        <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#dcfce7] text-[#15803d] text-[12px] font-medium">
-                          <span className="material-symbols-outlined text-[15px]">done_all</span>
-                          <span>{item.telegram_status_label || "Terkirim ke Telegram"}</span>
-                        </div>
-                        <div className="text-on-surface-variant text-[11px] mt-1">
-                          {item.recipients_label}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-3 align-top text-right">
-                        {item.acknowledged ? (
-                          <span className="inline-flex items-center gap-1 text-secondary text-label-sm font-semibold">
-                            <span className="material-symbols-outlined text-[16px]">
-                              check_circle
+                      <option value="Semua Event">
+                        Semua Event ({summary?.alerts?.total || 0})
+                      </option>
+                      <option value="Urgensi Normal">Urgensi Normal</option>
+                      <option value="Perhatian & Peringatan">Perhatian & Peringatan</option>
+                      <option value="Status Daya">Status Daya</option>
+                      <option value="Uji Sistem">Uji Sistem</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[760px]">
+                    <thead>
+                      <tr className="border-b border-surface-container-high/40 text-on-surface-variant text-label-sm uppercase tracking-wider">
+                        <th className="py-3 px-3 font-semibold w-[120px]">Waktu (WIB)</th>
+                        <th className="py-3 px-3 font-semibold w-[130px]">Tingkat Urgensi</th>
+                        <th className="py-3 px-4 font-semibold">Deskripsi Telemetri Sensor</th>
+                        <th className="py-3 px-4 font-semibold w-[220px]">
+                          Status Pengiriman Telegram
+                        </th>
+                        <th className="py-3 px-3 text-right font-semibold w-[90px]">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-container-high/40 text-on-surface text-body-sm">
+                      {alertsList.map((item) => (
+                        <tr
+                          key={item.id}
+                          className="hover:bg-surface-container-low/30 transition-colors"
+                        >
+                          <td className="py-3.5 px-3 align-top whitespace-nowrap">
+                            <div className="font-semibold text-on-surface">{item.time_wib}</div>
+                            <div className="text-[11px] text-on-surface-variant">
+                              {item.day_label}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-3 align-top">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container text-on-surface text-label-sm font-semibold">
+                              {item.urgency}
                             </span>
-                            <span>Selesai</span>
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedAlert(item)}
-                            className="px-3 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-label-sm font-medium transition-colors"
-                          >
-                            {item.action_type || "Detail"}
-                          </button>
-                        )}
-                      </td>
+                          </td>
+                          <td className="py-3.5 px-4 align-top">
+                            <div className="font-semibold text-on-surface">{item.title}</div>
+                            <div className="text-on-surface-variant text-body-sm mt-0.5">
+                              {item.description}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 align-top">
+                            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#dcfce7] text-[#15803d] text-[12px] font-medium">
+                              <span className="material-symbols-outlined text-[15px]">
+                                done_all
+                              </span>
+                              <span>{item.telegram_status_label || "Terkirim ke Telegram"}</span>
+                            </div>
+                            <div className="text-on-surface-variant text-[11px] mt-1">
+                              {item.recipients_label}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-3 align-top text-right">
+                            {item.acknowledged ? (
+                              <span className="inline-flex items-center gap-1 text-secondary text-label-sm font-semibold">
+                                <span className="material-symbols-outlined text-[16px]">
+                                  check_circle
+                                </span>
+                                <span>Selesai</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAlert(item)}
+                                className="px-3 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-label-sm font-medium transition-colors"
+                              >
+                                {item.action_type || "Detail"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <div className="w-full overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[700px]">
+                  <thead>
+                    <tr className="border-b border-surface-container-high/40 text-on-surface-variant text-label-sm uppercase tracking-wider">
+                      <th className="py-3 px-3 font-semibold w-[140px]">Waktu (WIB)</th>
+                      <th className="py-3 px-4 font-semibold">Detak Jantung (BPM)</th>
+                      <th className="py-3 px-4 font-semibold">Kadar Oksigen (SpO2)</th>
+                      <th className="py-3 px-4 font-semibold">Kontak Jari (MAX30102)</th>
+                      <th className="py-3 px-4 font-semibold">Akselerasi Gerak</th>
+                      <th className="py-3 px-3 text-right font-semibold">Status Indikasi</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-surface-container-high/40 text-on-surface text-body-sm">
+                    {vitalsList.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="hover:bg-surface-container-low/30 transition-colors"
+                      >
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <div className="font-semibold text-on-surface">{row.time_wib}</div>
+                          <div className="text-[11px] text-on-surface-variant">{row.day_label}</div>
+                        </td>
+                        <td className="py-3 px-4 font-bold">
+                          {row.bpm > 0 ? `${row.bpm} BPM` : "-- BPM"}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-primary">
+                          {row.spo2 > 0 ? `${row.spo2} %` : "-- %"}
+                        </td>
+                        <td className="py-3 px-4">
+                          {row.finger_detected ? "Terdeteksi" : "Jari Tidak Ada"}
+                        </td>
+                        <td className="py-3 px-4 text-on-surface-variant">
+                          {Number(row.accel_mag || 9.8).toFixed(2)} m/s²
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          {row.sos_active
+                            ? "Darurat SOS"
+                            : row.fall_candidate
+                            ? "Dugaan Jatuh"
+                            : "Stabil & Normal"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </div>
       </main>
@@ -543,7 +652,9 @@ export default function App() {
             <h3 className="text-headline-md font-bold text-on-surface">{selectedAlert.title}</h3>
             <p className="text-body-sm text-on-surface-variant">{selectedAlert.description}</p>
             <div className="text-label-sm text-on-surface-variant bg-surface-container-low p-3 rounded-xl">
-              <div>Waktu: {selectedAlert.time_wib} ({selectedAlert.day_label})</div>
+              <div>
+                Waktu: {selectedAlert.time_wib} ({selectedAlert.day_label})
+              </div>
               <div>Metode Deteksi: {selectedAlert.detection_method}</div>
               <div>Telegram: {selectedAlert.telegram_status_label}</div>
             </div>
